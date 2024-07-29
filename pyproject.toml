@@ -84,7 +84,7 @@ testing = [
 
 dev = [
     "weatherapi[server,lint,testing]",
-    "pre-commit==3.7.1",
+    "pre-commit==3.8.0",
     "detect-secrets==1.5.0",
 ]
 
