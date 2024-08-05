@@ -53,7 +53,7 @@ dependencies = [
 # public distributions
 
 server = [
-    "uvicorn==0.30.3",
+    "uvicorn==0.30.5",
 ]
 
 # dev dependencies
