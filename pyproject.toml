@@ -53,7 +53,7 @@ dependencies = [
 # public distributions
 
 server = [
-    "uvicorn==0.30.3",
+    "uvicorn==0.30.5",
 ]
 
 # dev dependencies
@@ -63,18 +63,19 @@ lint = [
     "types-ujson",
     "types-Pygments",
     "types-docutils",
-    "mypy==1.11.0",
-    "ruff==0.5.5",
+    "mypy==1.11.1",
+    "ruff==0.5.6",
     "pyupgrade-directories==0.3.0",
     "bandit==1.7.9",
-    "semgrep==1.81.0",
+    "semgrep==1.83.0",
     "pytest-mypy-plugins==3.1.2",
 ]
 
 test-core = [
-    "coverage[toml]==7.6.0",
+    "coverage[toml]==7.6.1",
     "pytest==8.3.2",
     "pytest-asyncio==0.23.8",
+    "httpx==0.27.0",
 ]
 
 testing = [
