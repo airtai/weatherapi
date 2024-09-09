@@ -14,8 +14,9 @@ CITY = "Chennai"
 
 class TestRoutes:
     @pytest.mark.asyncio
-    async def test_get_weather(self) -> None:
-        weather = await get_weather(CITY)
+    @pytest.mark.parametrize("include_hourly", [True, False])
+    async def test_get_weather_hourly(self, include_hourly: bool) -> None:
+        weather = await get_weather(CITY, include_hourly=include_hourly)
         assert weather.city == CITY
         assert weather.temperature > 0
 
@@ -25,21 +26,48 @@ class TestRoutes:
         first_daily_forecast = daily_forecast[0]
         assert first_daily_forecast.forecast_date == datetime.date.today()
         assert first_daily_forecast.temperature > 0
-        assert len(first_daily_forecast.hourly_forecasts) > 0
+        if not include_hourly:
+            assert first_daily_forecast.hourly_forecasts is None
+        else:
+            assert len(first_daily_forecast.hourly_forecasts) > 0  # type: ignore [arg-type]
 
-        first_hourly_forecast = first_daily_forecast.hourly_forecasts[0]
-        assert isinstance(first_hourly_forecast, HourlyForecast)
-        assert first_hourly_forecast.forecast_time is not None
-        assert first_hourly_forecast.temperature > 0
-        assert first_hourly_forecast.description is not None
+            first_hourly_forecast = first_daily_forecast.hourly_forecasts[0]  # type: ignore [index]
+            assert isinstance(first_hourly_forecast, HourlyForecast)
+            assert first_hourly_forecast.forecast_time is not None
+            assert first_hourly_forecast.temperature > 0
+            assert first_hourly_forecast.description is not None
 
-    def test_weather_route(self) -> None:
-        response = client.get(f"/?city={CITY}")
+    def test_daily_weather_route(self) -> None:
+        response = client.get(f"/daily?city={CITY}")
         assert response.status_code == 200
         resp_json = response.json()
         assert resp_json.get("city") == CITY
         assert resp_json.get("temperature") > 0
 
+        assert len(resp_json.get("daily_forecasts")) > 0
+        daily_forecasts = resp_json.get("daily_forecasts")
+        assert isinstance(daily_forecasts, list)
+
+        first_daily_forecast = daily_forecasts[0]
+        assert (
+            first_daily_forecast.get("forecast_date")
+            == datetime.date.today().isoformat()
+        )
+        assert first_daily_forecast.get("temperature") > 0
+        assert first_daily_forecast.get("hourly_forecasts") is None
+
+    def test_hourly_weather_route_with_invalid_key(self) -> None:
+        response = client.get(f"/hourly?city={CITY}", headers={"x-key": "wrong_key"})
+        assert response.status_code == 403
+        resp_json = response.json()
+        assert resp_json.get("detail") == f"Invalid API Key; Try '{API_KEY}'"
+
+    def test_hourly_weather_route_with_valid_key(self) -> None:
+        response = client.get(f"/hourly?city={CITY}", headers={"x-key": API_KEY})
+        assert response.status_code == 200
+        resp_json = response.json()
+        assert resp_json.get("city") == CITY
+        assert resp_json.get("temperature") > 0
         assert len(resp_json.get("daily_forecasts")) > 0
         daily_forecasts = resp_json.get("daily_forecasts")
         assert isinstance(daily_forecasts, list)
@@ -58,18 +86,6 @@ class TestRoutes:
         assert first_hourly_forecast.get("temperature") > 0  # type: ignore
         assert first_hourly_forecast.get("description") is not None
 
-    def test_secure_weather_route(self) -> None:
-        response = client.get(f"/secure?city={CITY}", headers={"x-key": "wrong_key"})
-        assert response.status_code == 403
-        resp_json = response.json()
-        assert resp_json.get("detail") == f"Invalid API Key; Try '{API_KEY}'"
-
-        response = client.get(f"/secure?city={CITY}", headers={"x-key": API_KEY})
-        assert response.status_code == 200
-        resp_json = response.json()
-        assert resp_json.get("city") == CITY
-        assert resp_json.get("temperature") > 0
-
     def test_openapi(self) -> None:
         expected = {
             "openapi": "3.1.0",
@@ -78,11 +94,11 @@ class TestRoutes:
                 {"url": "http://localhost:8000", "description": "Weather app server"}
             ],
             "paths": {
-                "/": {
+                "/daily": {
                     "get": {
-                        "summary": "Get Weather Route",
-                        "description": "Get weather forecast for a given city",
-                        "operationId": "get_weather_route__get",
+                        "summary": "Get Daily Weather",
+                        "description": "Get daily weather forecast for a given city",
+                        "operationId": "get_daily_weather_daily_get",
                         "parameters": [
                             {
                                 "name": "city",
@@ -120,11 +136,11 @@ class TestRoutes:
                         },
                     }
                 },
-                "/secure": {
+                "/hourly": {
                     "get": {
-                        "summary": "Secure Get Weather Route",
-                        "description": "Get weather forecast for a given city with security",
-                        "operationId": "secure_get_weather_route_secure_get",
+                        "summary": "Get Hourly Weather",
+                        "description": "Get hourly weather forecast for a given city",
+                        "operationId": "get_hourly_weather_hourly_get",
                         "security": [{"APIKeyHeader": []}],
                         "parameters": [
                             {
@@ -175,19 +191,20 @@ class TestRoutes:
                             },
                             "temperature": {"type": "integer", "title": "Temperature"},
                             "hourly_forecasts": {
-                                "items": {
-                                    "$ref": "#/components/schemas/HourlyForecast"
-                                },
-                                "type": "array",
+                                "anyOf": [
+                                    {
+                                        "items": {
+                                            "$ref": "#/components/schemas/HourlyForecast"
+                                        },
+                                        "type": "array",
+                                    },
+                                    {"type": "null"},
+                                ],
                                 "title": "Hourly Forecasts",
                             },
                         },
                         "type": "object",
-                        "required": [
-                            "forecast_date",
-                            "temperature",
-                            "hourly_forecasts",
-                        ],
+                        "required": ["forecast_date", "temperature"],
                         "title": "DailyForecast",
                     },
                     "HTTPValidationError": {
