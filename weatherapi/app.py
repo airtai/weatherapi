@@ -4,7 +4,8 @@ from os import environ
 from typing import Annotated, List
 
 import python_weather
-from fastapi import FastAPI, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 
 from . import __version__
@@ -25,6 +26,9 @@ app = FastAPI(
     version=__version__,
     title="WeatherAPI",
 )
+
+API_KEY = "secure weather key"  # pragma: allowlist secret
+header_scheme = APIKeyHeader(name="x-key")
 
 
 class HourlyForecast(BaseModel):
@@ -82,4 +86,14 @@ async def get_weather(city: str) -> Weather:
 async def get_weather_route(
     city: Annotated[str, Query(description="city for which forecast is requested")],
 ) -> Weather:
+    return await get_weather(city)
+
+
+@app.get("/secure", description="Get weather forecast for a given city with security")
+async def secure_get_weather_route(
+    city: Annotated[str, Query(description="city for which forecast is requested")],
+    key: str = Depends(header_scheme),
+) -> Weather:
+    if key != API_KEY:
+        raise HTTPException(status_code=403, detail=f"Invalid API Key; Try '{API_KEY}'")
     return await get_weather(city)
